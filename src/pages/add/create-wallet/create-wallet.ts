@@ -1,3 +1,5 @@
+import CWC from 'crypto-wallet-core';
+
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { TranslateService } from '@ngx-translate/core';
@@ -81,7 +83,7 @@ export class CreateWalletPage implements OnInit {
     this.defaults = this.configProvider.getDefaults();
     this.tc = this.isShared ? this.defaults.wallet.totalCopayers : 1;
     this.copayers = _.range(2, this.defaults.limits.totalCopayers + 1);
-    this.derivationPathByDefault = this.derivationPathHelperProvider.default;
+    this.derivationPathByDefault = CWC.deriver.pathFor(this.coin, 'livenet');
     this.derivationPathForTestnet = this.derivationPathHelperProvider.defaultTestnet;
     this.showAdvOpts = false;
 
@@ -101,14 +103,14 @@ export class CreateWalletPage implements OnInit {
     this.createForm.controls['coin'].setValue(this.coin);
     switch (this.coin) {
       case 'btc':
-      this.createLabel = this.translate.instant('Create BTC Wallet')
-      break;
+        this.createLabel = this.translate.instant('Create BTC Wallet');
+        break;
       case 'bch':
-      this.createLabel = this.translate.instant('Create BCH Wallet');
-      break;
+        this.createLabel = this.translate.instant('Create BCH Wallet');
+        break;
       case 'eth':
-      this.createLabel = this.translate.instant('Create ETH Wallet');
-      break;
+        this.createLabel = this.translate.instant('Create ETH Wallet');
+        break;
     }
 
     this.setTotalCopayers(this.tc);
@@ -241,6 +243,7 @@ export class CreateWalletPage implements OnInit {
 
   private create(opts): void {
     this.onGoingProcessProvider.set('creatingWallet');
+    window.console.log(opts);
     const promise = this.createForm.value.addToVault
       ? this.profileProvider.createWalletInVault(opts)
       : this.profileProvider.createNewSeedWallet(opts);
