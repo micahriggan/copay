@@ -33,13 +33,12 @@ export class DerivationPathHelperProvider {
   public getNetworkName(path: string): string {
     const coinType = path.split('/')[2];
     let networkName: string;
-
     switch (coinType) {
-      case "0'":
-        networkName = 'livenet';
-        break;
       case "1'":
         networkName = 'testnet';
+        break;
+      default:
+        networkName = 'livenet';
         break;
     }
     return networkName;

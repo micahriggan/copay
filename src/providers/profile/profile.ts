@@ -70,7 +70,7 @@ export class ProfileProvider {
       },
       {
         coin: Coin.ETH,
-        derivationPath: this.derivationPathHelperProvider.ethDefault
+        derivationPath: this.derivationPathHelperProvider.default
       },
       {
         coin: Coin.BTC,
@@ -1203,14 +1203,14 @@ export class ProfileProvider {
             let coin = '[BTC]';
             switch (opts.coin) {
               case 'btc':
-              coin = '[BTC]'
-              break;
+                coin = '[BTC]';
+                break;
               case 'bch':
-              coin = '[BCH]'
-              break;
+                coin = '[BCH]';
+                break;
               case 'eth':
-              coin = '[ETH]'
-              break;
+                coin = '[ETH]';
+                break;
             }
             const name =
               opts.name ||
