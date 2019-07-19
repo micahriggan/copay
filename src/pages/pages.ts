@@ -1,4 +1,5 @@
 /* Pages */
+import { AddWalletPage } from '../pages/add-wallet/add-wallet';
 import { AddPage } from '../pages/add/add';
 import { CopayersPage } from '../pages/add/copayers/copayers';
 import { CreateWalletPage } from '../pages/add/create-wallet/create-wallet';
@@ -9,11 +10,10 @@ import { BackupGamePage } from '../pages/backup/backup-game/backup-game';
 import { BackupKeyPage } from '../pages/backup/backup-key/backup-key';
 import { SendFeedbackPage } from '../pages/feedback/send-feedback/send-feedback';
 import { FinishModalPage } from '../pages/finish/finish';
-import { BackupRequestPage } from '../pages/onboarding/backup-request/backup-request';
+import { NewDesignTourPage } from '../pages/new-design-tour/new-design-tour';
 import { CollectEmailPage } from '../pages/onboarding/collect-email/collect-email';
 import { DisclaimerPage } from '../pages/onboarding/disclaimer/disclaimer';
 import { OnboardingPage } from '../pages/onboarding/onboarding';
-import { TourPage } from '../pages/onboarding/tour/tour';
 import { PaperWalletPage } from '../pages/paper-wallet/paper-wallet';
 import { SlideToAcceptPage } from '../pages/slide-to-accept/slide-to-accept';
 import { TabsPage } from '../pages/tabs/tabs';
@@ -23,6 +23,7 @@ import { SearchTxModalPage } from '../pages/wallet-details/search-tx-modal/searc
 import { WalletBalancePage } from '../pages/wallet-details/wallet-balance/wallet-balance';
 import { WalletDetailsPage } from '../pages/wallet-details/wallet-details';
 import { WalletTabsPage } from '../pages/wallet-tabs/wallet-tabs';
+import { ConfirmInvoicePage } from './integrations/invoice/confirm-invoice/confirm-invoice';
 
 // Integrations: Coinbase
 import { BuyCoinbasePage } from '../pages/integrations/coinbase/buy-coinbase/buy-coinbase';
@@ -47,11 +48,11 @@ import { BitPaySettingsPage } from '../pages/integrations/bitpay-card/bitpay-set
 
 /*Includes */
 import { CardItemPage } from '../pages/includes/card-item/card-item';
+import { CreateNewWalletPage } from '../pages/includes/create-new-wallet/create-new-wallet';
 import { FeedbackCardPage } from '../pages/includes/feedback-card/feedback-card';
 import { GravatarPage } from '../pages/includes/gravatar/gravatar';
 import { MultipleOutputsPage } from '../pages/includes/multiple-outputs/multiple-outputs';
 import { TxpPage } from '../pages/includes/txp/txp';
-import { WalletActivityPage } from '../pages/includes/wallet-activity/wallet-activity';
 
 /* Tabs */
 import { HomePage } from '../pages/home/home';
@@ -78,19 +79,21 @@ import { LanguagePage } from '../pages/settings/language/language';
 import { LockPage } from '../pages/settings/lock/lock';
 import { NotificationsPage } from '../pages/settings/notifications/notifications';
 import { SharePage } from '../pages/settings/share/share';
-import { VaultDeletePage } from '../pages/settings/vault-delete/vault-delete';
+
+/* Wallet Group Settings */
+import { WalletGroupDeletePage } from '../pages/settings/wallet-group-settings/wallet-group-delete/wallet-group-delete';
+import { WalletGroupExtendedPrivateKeyPage } from '../pages/settings/wallet-group-settings/wallet-group-extended-private-key/wallet-group-extended-private-key';
+import { WalletGroupSettingsPage } from '../pages/settings/wallet-group-settings/wallet-group-settings';
 
 /* Wallet Settings */
-import { WalletColorPage } from '../pages/settings/wallet-settings/wallet-color/wallet-color';
 import { WalletNamePage } from '../pages/settings/wallet-settings/wallet-name/wallet-name';
 import { WalletSettingsPage } from '../pages/settings/wallet-settings/wallet-settings';
 
 /* Wallet Advanced Settings */
 import { AllAddressesPage } from '../pages/settings/wallet-settings/wallet-settings-advanced/wallet-addresses/all-addresses/all-addresses';
 import { WalletAddressesPage } from '../pages/settings/wallet-settings/wallet-settings-advanced/wallet-addresses/wallet-addresses';
-import { WalletDeletePage } from '../pages/settings/wallet-settings/wallet-settings-advanced/wallet-delete/wallet-delete';
+import { WalletDuplicatePage } from '../pages/settings/wallet-settings/wallet-settings-advanced/wallet-duplicate/wallet-duplicate';
 import { WalletExportPage } from '../pages/settings/wallet-settings/wallet-settings-advanced/wallet-export/wallet-export';
-import { WalletExtendedPrivateKeyPage } from '../pages/settings/wallet-settings/wallet-settings-advanced/wallet-information/wallet-extended-private-key/wallet-extended-private-key';
 import { WalletInformationPage } from '../pages/settings/wallet-settings/wallet-settings-advanced/wallet-information/wallet-information';
 import { WalletServiceUrlPage } from '../pages/settings/wallet-settings/wallet-settings-advanced/wallet-service-url/wallet-service-url';
 import { WalletTransactionHistoryPage } from '../pages/settings/wallet-settings/wallet-settings-advanced/wallet-transaction-history/wallet-transaction-history';
@@ -113,6 +116,7 @@ import { GIFT_CARD_PAGES } from './integrations/gift-cards/gift-cards';
 
 export const PAGES = [
   AddPage,
+  AddWalletPage,
   AmountPage,
   AddressbookPage,
   AddressbookAddPage,
@@ -121,7 +125,6 @@ export const PAGES = [
   AdvancedPage,
   AllAddressesPage,
   AltCurrencyPage,
-  BackupRequestPage,
   BitPayCardHome,
   BitPayCardIntroPage,
   BitPayCardPage,
@@ -131,8 +134,10 @@ export const PAGES = [
   CardCatalogPage,
   ChooseFeeLevelPage,
   CreateWalletPage,
+  CreateNewWalletPage,
   CoinbasePage,
   CoinbaseTxDetailsPage,
+  ConfirmInvoicePage,
   CopayersPage,
   FeedbackCardPage,
   SharePage,
@@ -176,27 +181,26 @@ export const PAGES = [
   SessionLogPage,
   SendFeedbackPage,
   FinishModalPage,
-  TourPage,
+  NewDesignTourPage,
   TabsPage,
   TxpDetailsPage,
   TxDetailsPage,
   TxpPage,
-  VaultDeletePage,
   WalletSettingsPage,
   WalletNamePage,
-  WalletColorPage,
   WalletInformationPage,
   WalletAddressesPage,
   WalletExportPage,
   WalletServiceUrlPage,
   WalletTransactionHistoryPage,
-  WalletDeletePage,
-  WalletExtendedPrivateKeyPage,
+  WalletDuplicatePage,
+  WalletGroupExtendedPrivateKeyPage,
+  WalletGroupDeletePage,
+  WalletGroupSettingsPage,
   WalletDetailsPage,
   WalletTabsChild,
   WalletTabsPage,
   WalletBalancePage,
-  WalletActivityPage,
   WideHeaderPage,
   CardItemPage,
   SlideToAcceptPage

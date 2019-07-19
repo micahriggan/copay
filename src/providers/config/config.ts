@@ -11,7 +11,6 @@ export interface Config {
   };
 
   wallet: {
-    useLegacyAddress: boolean;
     requiredCopayers: number;
     totalCopayers: number;
     spendUnconfirmed: boolean;
@@ -97,6 +96,8 @@ export interface Config {
     btc: string;
     bch: string;
   };
+
+  allowMultiplePrimaryWallets: boolean;
 }
 
 @Injectable()
@@ -118,7 +119,6 @@ export class ConfigProvider {
 
       // wallet default config
       wallet: {
-        useLegacyAddress: false,
         requiredCopayers: 2,
         totalCopayers: 3,
         spendUnconfirmed: false,
@@ -202,7 +202,9 @@ export class ConfigProvider {
       blockExplorerUrl: {
         btc: 'insight.bitcore.io/#/BTC/',
         bch: 'insight.bitcore.io/#/BCH/'
-      }
+      },
+
+      allowMultiplePrimaryWallets: false
     };
   }
 
@@ -229,14 +231,11 @@ export class ConfigProvider {
 
   private logImportantConfig(config: Config): void {
     const spendUnconfirmed = config.wallet.spendUnconfirmed;
-    const useLegacyAddress = config.wallet.useLegacyAddress;
     const lockMethod = config && config.lock ? config.lock.method : null;
 
     this.logger.debug(
       'Config | spendUnconfirmed: ' +
         spendUnconfirmed +
-        ' - useLegacyAddress: ' +
-        useLegacyAddress +
         ' - lockMethod: ' +
         lockMethod
     );

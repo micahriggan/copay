@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { StatusBar } from '@ionic-native/status-bar';
 import { TranslateService } from '@ngx-translate/core';
 import {
   App,
@@ -17,6 +18,7 @@ import { FinishModalPage } from '../../../finish/finish';
 // Provider
 import { DecimalPipe } from '@angular/common';
 import {
+  EmailNotificationsProvider,
   FeeProvider,
   TxConfirmNotificationProvider,
   WalletTabsProvider
@@ -28,11 +30,15 @@ import { BwcProvider } from '../../../../providers/bwc/bwc';
 import { ClipboardProvider } from '../../../../providers/clipboard/clipboard';
 import { ConfigProvider } from '../../../../providers/config/config';
 import { ExternalLinkProvider } from '../../../../providers/external-link/external-link';
-import { GiftCardProvider } from '../../../../providers/gift-card/gift-card';
+import {
+  getVisibleDiscount,
+  GiftCardProvider
+} from '../../../../providers/gift-card/gift-card';
 import {
   CardConfig,
   GiftCard
 } from '../../../../providers/gift-card/gift-card.types';
+import { KeyProvider } from '../../../../providers/key/key';
 import { OnGoingProcessProvider } from '../../../../providers/on-going-process/on-going-process';
 import { PayproProvider } from '../../../../providers/paypro/paypro';
 import { PlatformProvider } from '../../../../providers/platform/platform';
@@ -63,6 +69,7 @@ export class ConfirmCardPurchasePage extends ConfirmPage {
   public invoiceFee: number;
   public networkFee: number;
   public totalAmount: number;
+  public totalDiscount: number;
   public amountUnitStr: string;
   public network: string;
   public onlyIntegers: boolean;
@@ -71,15 +78,17 @@ export class ConfirmCardPurchasePage extends ConfirmPage {
   public hideSlideButton: boolean;
 
   constructor(
-    actionSheetProvider: ActionSheetProvider,
     app: App,
+    actionSheetProvider: ActionSheetProvider,
     bwcErrorProvider: BwcErrorProvider,
     bwcProvider: BwcProvider,
     configProvider: ConfigProvider,
     decimalPipe: DecimalPipe,
     feeProvider: FeeProvider,
     private giftCardProvider: GiftCardProvider,
+    keyProvider: KeyProvider,
     replaceParametersProvider: ReplaceParametersProvider,
+    private emailNotificationsProvider: EmailNotificationsProvider,
     externalLinkProvider: ExternalLinkProvider,
     logger: Logger,
     modalCtrl: ModalController,
@@ -97,11 +106,12 @@ export class ConfirmCardPurchasePage extends ConfirmPage {
     walletTabsProvider: WalletTabsProvider,
     clipboardProvider: ClipboardProvider,
     events: Events,
-    AppProvider: AppProvider
+    AppProvider: AppProvider,
+    statusBar: StatusBar
   ) {
     super(
-      actionSheetProvider,
       app,
+      actionSheetProvider,
       bwcErrorProvider,
       bwcProvider,
       configProvider,
@@ -124,7 +134,9 @@ export class ConfirmCardPurchasePage extends ConfirmPage {
       walletTabsProvider,
       clipboardProvider,
       events,
-      AppProvider
+      AppProvider,
+      keyProvider,
+      statusBar
     );
     this.hideSlideButton = false;
     this.configWallet = this.configProvider.get().wallet;
@@ -184,11 +196,11 @@ export class ConfirmCardPurchasePage extends ConfirmPage {
   }
 
   async publishAndSign(wallet, txp) {
-    if (!wallet.canSign() && !wallet.isPrivKeyExternal()) {
+    if (!wallet.canSign) {
       const err = this.translate.instant('No signing proposal: No private key');
       return Promise.reject(err);
     }
-    if (this.walletProvider.isEncrypted(wallet)) {
+    if (wallet.isPrivKeyEncrypted) {
       this.hideSlideButton = true;
     }
 
@@ -215,7 +227,8 @@ export class ConfirmCardPurchasePage extends ConfirmPage {
 
     const networkFee = await this.satToFiat(wallet.coin, networkFeeSat);
     this.networkFee = Number(networkFee);
-    this.totalAmount = this.amount + this.invoiceFee + this.networkFee;
+    this.totalAmount =
+      this.amount - this.totalDiscount + this.invoiceFee + this.networkFee;
   }
 
   private isCryptoCurrencySupported(wallet, invoice) {
@@ -260,6 +273,7 @@ export class ConfirmCardPurchasePage extends ConfirmPage {
       });
 
     const accessKey = cardOrder && cardOrder.accessKey;
+    const totalDiscount = cardOrder && cardOrder.totalDiscount;
     if (!accessKey) {
       throw {
         message: this.translate.instant('No access key defined')
@@ -272,7 +286,7 @@ export class ConfirmCardPurchasePage extends ConfirmPage {
           message: this.translate.instant('Could not get the invoice')
         };
       });
-    return { invoice, accessKey };
+    return { invoice, accessKey, totalDiscount };
   }
 
   private async createTx(wallet, invoice, message: string) {
@@ -325,8 +339,7 @@ export class ConfirmCardPurchasePage extends ConfirmPage {
     txp['origToAddress'] = txp.toAddress;
 
     if (wallet.coin && wallet.coin == 'bch') {
-      // Use legacy address
-      txp.toAddress = this.bitcoreCash.Address(txp.toAddress).toString();
+      txp.toAddress = this.bitcoreCash.Address(txp.toAddress).toString(true);
       txp.outputs[0].toAddress = txp.toAddress;
     }
 
@@ -347,12 +360,23 @@ export class ConfirmCardPurchasePage extends ConfirmPage {
     await this.giftCardProvider.saveGiftCard(card);
     this.onGoingProcessProvider.clear();
     this.logger.debug('Saved new gift card with status: ' + card.status);
+    this.logDiscountedPurchase();
     this.finish(card);
+  }
+
+  private logDiscountedPurchase() {
+    if (!getVisibleDiscount(this.cardConfig)) return;
+    const params = {
+      ...this.giftCardProvider.getDiscountEventParams(this.cardConfig),
+      discounted: true
+    };
+    this.giftCardProvider.logEvent('purchasedGiftCard', params);
   }
 
   private async promptEmail() {
     if (!this.cardConfig.emailRequired) {
-      return Promise.resolve();
+      const notificationEmail = this.emailNotificationsProvider.getEmailIfEnabled();
+      return Promise.resolve(notificationEmail);
     }
     const email = await this.giftCardProvider.getUserEmail();
     if (email) return Promise.resolve(email);
@@ -392,9 +416,11 @@ export class ConfirmCardPurchasePage extends ConfirmPage {
 
     const email = await this.promptEmail();
     this.hideSlideButton = false;
+    const discount = getVisibleDiscount(this.cardConfig);
     const dataSrc = {
       amount: parsedAmount.amount,
       currency: parsedAmount.currency,
+      discounts: discount ? [discount.code] : [],
       uuid: wallet.id,
       email,
       buyerSelectedTransactionCurrency: COIN,
@@ -408,6 +434,7 @@ export class ConfirmCardPurchasePage extends ConfirmPage {
     });
     const invoice = data.invoice;
     const accessKey = data.accessKey;
+    this.totalDiscount = data.totalDiscount || 0;
 
     if (!this.isCryptoCurrencySupported(wallet, invoice)) {
       this.onGoingProcessProvider.clear();
@@ -495,6 +522,7 @@ export class ConfirmCardPurchasePage extends ConfirmPage {
     await this.giftCardProvider.saveCard(this.tx.giftData, {
       remove: true
     });
+    await this.walletProvider.removeTx(this.wallet, this.tx);
     const errorMessage = err && err.message;
     const canceledErrors = ['FINGERPRINT_CANCELLED', 'PASSWORD_CANCELLED'];
     if (canceledErrors.indexOf(errorMessage) !== -1) {

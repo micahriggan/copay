@@ -35,6 +35,7 @@ export class JoinWalletPage {
   public okText: string;
   public cancelText: string;
   public joinForm: FormGroup;
+  public keyId: string;
 
   private derivationPathByDefault: string;
   private derivationPathForTestnet: string;
@@ -63,13 +64,12 @@ export class JoinWalletPage {
     this.okText = this.translate.instant('Ok');
     this.cancelText = this.translate.instant('Cancel');
     this.defaults = this.configProvider.getDefaults();
-    this.derivationPathByDefault = this.derivationPathHelperProvider.default;
-    this.derivationPathForTestnet = this.derivationPathHelperProvider.defaultTestnet;
-
     this.showAdvOpts = false;
+    this.keyId = this.navParams.get('keyId');
 
     this.regex = /^[0-9A-HJ-NP-Za-km-z]{70,80}$/; // For invitationCode
     this.joinForm = this.form.group({
+      walletName: [null, Validators.required],
       myName: [null, Validators.required],
       invitationCode: [
         null,
@@ -78,7 +78,7 @@ export class JoinWalletPage {
       bwsURL: [this.defaults.bws.url],
       selectedSeed: ['new'],
       recoveryPhrase: [null],
-      derivationPath: [this.derivationPathByDefault]
+      derivationPath: [null]
     });
 
     this.seedOptions = [
@@ -94,7 +94,7 @@ export class JoinWalletPage {
       }
     ];
     this.events.subscribe(
-      'update:invitationCode',
+      'Local/InvitationScan',
       this.updateInvitationCodeHandler
     );
   }
@@ -113,7 +113,7 @@ export class JoinWalletPage {
 
   ngOnDestroy() {
     this.events.unsubscribe(
-      'update:invitationCode',
+      'Local/InvitationScan',
       this.updateInvitationCodeHandler
     );
   }
@@ -126,6 +126,7 @@ export class JoinWalletPage {
   public onQrCodeScannedJoin(data: string): void {
     if (this.regex.test(data)) {
       this.joinForm.controls['invitationCode'].setValue(data);
+      this.processInvitation(data);
     } else {
       const errorInfoSheet = this.actionSheetProvider.createInfoSheet(
         'default-error',
@@ -163,8 +164,15 @@ export class JoinWalletPage {
       let walletData;
       try {
         walletData = this.bwcProvider.parseSecret(invitation);
-        this.setDerivationPath(walletData.network);
         this.coin = walletData.coin;
+        this.derivationPathForTestnet = this.derivationPathHelperProvider.defaultTestnet;
+        this.derivationPathByDefault =
+          this.coin == 'bch'
+            ? this.derivationPathHelperProvider.defaultBCH
+            : this.derivationPathHelperProvider.defaultBTC;
+
+        this.setDerivationPath(walletData.network);
+
         this.logger.info('Correct invitation code for ' + walletData.network);
       } catch (ex) {
         this.logger.warn('Error parsing invitation: ' + ex);
@@ -174,6 +182,8 @@ export class JoinWalletPage {
 
   public setOptsAndJoin(): void {
     const opts: Partial<WalletOptions> = {
+      keyId: this.keyId,
+      name: this.joinForm.value.walletName,
       secret: this.joinForm.value.invitationCode,
       myName: this.joinForm.value.myName,
       bwsurl: this.joinForm.value.bwsURL,
@@ -214,6 +224,20 @@ export class JoinWalletPage {
         this.popupProvider.ionicAlert(title, subtitle);
         return;
       }
+
+      if (
+        !this.derivationPathHelperProvider.isValidDerivationPathCoin(
+          this.joinForm.value.derivationPath,
+          this.coin
+        )
+      ) {
+        const title = this.translate.instant('Error');
+        const subtitle = this.translate.instant(
+          'Invalid derivation path for selected coin'
+        );
+        this.popupProvider.ionicAlert(title, subtitle);
+        return;
+      }
     }
 
     if (setSeed && !opts.mnemonic && !opts.extendedPrivateKey) {
@@ -230,20 +254,30 @@ export class JoinWalletPage {
 
   private join(opts): void {
     this.onGoingProcessProvider.set('joiningWallet');
-
+    const addingNewWallet = this.keyId ? true : false;
     this.profileProvider
-      .joinWallet(opts)
+      .joinWallet(addingNewWallet, opts)
       .then(wallet => {
         this.clipboardProvider.clearClipboardIfValidData(['JoinWallet']);
         this.onGoingProcessProvider.clear();
-        this.events.publish('status:updated');
         this.walletProvider.updateRemotePreferences(wallet);
         this.pushNotificationsProvider.updateSubscription(wallet);
+        if (!addingNewWallet) {
+          this.profileProvider.setWalletGroupName(
+            wallet.credentials.keyId,
+            wallet.credentials.walletName
+          );
+        }
+        // using setRoot(TabsPage) as workaround when coming from scanner
         this.app
           .getRootNavs()[0]
           .setRoot(TabsPage)
           .then(() => {
-            this.events.publish('OpenWallet', wallet);
+            this.events.publish('Local/WalletListChange');
+
+            setTimeout(() => {
+              this.events.publish('OpenWallet', wallet);
+            }, 1000);
           });
       })
       .catch(err => {

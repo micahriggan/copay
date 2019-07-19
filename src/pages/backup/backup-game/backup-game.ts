@@ -1,7 +1,6 @@
 import { Component, ViewChild } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import {
-  Events,
   ModalController,
   Navbar,
   NavController,
@@ -12,13 +11,12 @@ import * as _ from 'lodash';
 
 // pages
 import { FinishModalPage } from '../../finish/finish';
-import { DisclaimerPage } from '../../onboarding/disclaimer/disclaimer';
 
 // providers
 import { ActionSheetProvider } from '../../../providers/action-sheet/action-sheet';
 import { BwcProvider } from '../../../providers/bwc/bwc';
+import { KeyProvider } from '../../../providers/key/key';
 import { Logger } from '../../../providers/logger/logger';
-import { OnGoingProcessProvider } from '../../../providers/on-going-process/on-going-process';
 import { ProfileProvider } from '../../../providers/profile/profile';
 
 @Component({
@@ -31,10 +29,6 @@ export class BackupGamePage {
   @ViewChild(Navbar)
   navBar: Navbar;
 
-  private fromOnboarding: boolean;
-  private isVaultWallet: boolean;
-  private vault;
-
   public mnemonicWords: string[];
   public shuffledMnemonicWords;
   public password: string;
@@ -42,33 +36,23 @@ export class BackupGamePage {
   public selectComplete: boolean;
   public mnemonicHasPassphrase;
   public useIdeograms;
-  public wallet;
   public keys;
-
-  private walletId: string;
+  public keyId: string;
 
   constructor(
-    private events: Events,
     private modalCtrl: ModalController,
     private navCtrl: NavController,
     private navParams: NavParams,
     private logger: Logger,
     private profileProvider: ProfileProvider,
     private bwcProvider: BwcProvider,
-    private onGoingProcessProvider: OnGoingProcessProvider,
     private actionSheetProvider: ActionSheetProvider,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private keyProvider: KeyProvider
   ) {
     this.mnemonicWords = this.navParams.data.words;
     this.keys = this.navParams.data.keys;
-    this.walletId = this.navParams.data.walletId;
-    this.fromOnboarding = this.navParams.data.fromOnboarding;
-    this.wallet = this.profileProvider.getWallet(this.walletId);
-    this.vault = this.profileProvider.getVault();
-    this.isVaultWallet =
-      this.vault &&
-      this.vault.walletIds &&
-      this.vault.walletIds.includes(this.wallet.credentials.walletId);
+    this.keyId = this.navParams.data.keyId;
     this.setFlow();
   }
 
@@ -140,106 +124,88 @@ export class BackupGamePage {
     }, 300);
   }
 
-  private setFlow(): void {
+  private setFlow() {
     if (!this.mnemonicWords) return;
 
     this.shuffledMnemonicWords = this.shuffledWords(this.mnemonicWords);
-    this.mnemonicHasPassphrase = this.wallet.mnemonicHasPassphrase();
-    this.useIdeograms = this.keys.mnemonic.indexOf('\u3000') >= 0;
+    this.mnemonicHasPassphrase = this.keyProvider.mnemonicHasPassphrase(
+      this.keyId
+    );
+    this.useIdeograms = this.mnemonicWords.indexOf('\u3000') >= 0;
     this.password = '';
     this.customWords = [];
     this.selectComplete = false;
   }
 
-  private confirm(): Promise<any> {
-    return new Promise((resolve, reject) => {
-      const customWordList = _.map(this.customWords, 'word');
+  public finalStep(): void {
+    const customWordList = _.map(this.customWords, 'word');
 
-      if (!_.isEqual(this.mnemonicWords, customWordList)) {
-        return reject('Mnemonic string mismatch');
-      }
+    if (!_.isEqual(this.mnemonicWords, customWordList)) {
+      this.showErrorInfoSheet('Mnemonic string mismatch');
+      return;
+    }
 
-      if (this.mnemonicHasPassphrase) {
-        const walletClient = this.bwcProvider.getClient();
-        const separator = this.useIdeograms ? '\u3000' : ' ';
-        const customSentence = customWordList.join(separator);
-        const password = this.password || '';
+    if (this.mnemonicHasPassphrase) {
+      const keyClient = this.bwcProvider.getKey();
+      const separator = this.useIdeograms ? '\u3000' : ' ';
+      const customSentence = customWordList.join(separator);
+      const password = this.password || '';
+      let key;
 
-        try {
-          walletClient.seedFromMnemonic(customSentence, {
-            network: this.wallet.credentials.network,
-            passphrase: password,
-            account: this.wallet.credentials.account
-          });
-        } catch (err) {
-          walletClient.credentials.xPrivKey = _.repeat('x', 64);
-          return reject(err);
-        }
-
-        if (
-          walletClient.credentials.xPrivKey.substr(
-            walletClient.credentials.xPrivKey
-          ) != this.keys.xPrivKey
-        ) {
-          delete walletClient.credentials;
-          return reject('Private key mismatch');
-        }
-      }
-
-      if (this.isVaultWallet) {
-        const vaultWallets = this.profileProvider.getVaultWallets();
-        vaultWallets.forEach(wallet => {
-          this.profileProvider.setBackupFlag(wallet.credentials.walletId);
+      try {
+        key = keyClient.fromMnemonic(customSentence, {
+          useLegacyCoinType: false,
+          useLegacyPurpose: false,
+          passphrase: password
         });
-        this.vault.needsBackup = false;
-        this.profileProvider.storeVault(this.vault);
-      } else {
-        this.profileProvider.setBackupFlag(this.wallet.credentials.walletId);
+      } catch (err) {
+        this.showErrorInfoSheet(err);
+        return;
       }
 
-      return resolve();
+      if (key.xPrivKey != this.keys.xPrivKey) {
+        this.showErrorInfoSheet('Private key mismatch');
+        return;
+      }
+    }
+    this.profileProvider.setBackupGroupFlag(this.keyId);
+    const opts = {
+      keyId: this.keyId
+    };
+    const wallets = this.profileProvider.getWallets(opts);
+    wallets.forEach(w => {
+      this.profileProvider.setWalletBackup(w.credentials.walletId);
+    });
+    this.showSuccessModal();
+  }
+
+  private showSuccessModal() {
+    const finishText = this.translate.instant(
+      'Your recovery phrase is verified'
+    );
+    const finishComment = this.translate.instant(
+      'Be sure to store your recovery phrase in a safe and secure place'
+    );
+    const cssClass = 'primary';
+    const params = { finishText, finishComment, cssClass };
+    const modal = this.modalCtrl.create(FinishModalPage, params, {
+      showBackdrop: true,
+      enableBackdropDismiss: false,
+      cssClass: 'finish-modal'
+    });
+    modal.present();
+    modal.onDidDismiss(() => {
+      this.navCtrl.popToRoot();
     });
   }
 
-  public finalStep(): void {
-    this.onGoingProcessProvider.set('validatingWords');
-    this.confirm()
-      .then(async () => {
-        this.onGoingProcessProvider.clear();
-        const finishText = this.translate.instant(
-          'Your recovery phrase is verified'
-        );
-        const finishComment = this.translate.instant(
-          'Be sure to store your recovery phrase in a safe and secure place'
-        );
-        const cssClass = 'primary';
-        const params = { finishText, finishComment, cssClass };
-        const modal = this.modalCtrl.create(FinishModalPage, params, {
-          showBackdrop: true,
-          enableBackdropDismiss: false,
-          cssClass: 'finish-modal'
-        });
-        await modal.present();
-        modal.onDidDismiss(() => {
-          if (this.fromOnboarding) {
-            this.navCtrl.push(DisclaimerPage);
-          } else {
-            this.navCtrl.popToRoot();
-            this.events.publish('Wallet/setAddress', true);
-          }
-        });
-      })
-      .catch(err => {
-        this.onGoingProcessProvider.clear();
-        this.logger.warn('Failed to verify backup: ', err);
-        const infoSheet = this.actionSheetProvider.createInfoSheet(
-          'backup-failed'
-        );
-        infoSheet.present();
-        infoSheet.onDidDismiss(() => {
-          this.clear();
-          this.setFlow();
-        });
-      });
+  private showErrorInfoSheet(err) {
+    this.logger.warn('Failed to verify backup: ', err);
+    const infoSheet = this.actionSheetProvider.createInfoSheet('backup-failed');
+    infoSheet.present();
+    infoSheet.onDidDismiss(() => {
+      this.clear();
+      this.setFlow();
+    });
   }
 }

@@ -22,6 +22,7 @@ import { CoinbaseProvider } from '../providers/coinbase/coinbase';
 import { ConfigProvider } from '../providers/config/config';
 import { EmailNotificationsProvider } from '../providers/email-notifications/email-notifications';
 import { IncomingDataProvider } from '../providers/incoming-data/incoming-data';
+import { KeyProvider } from '../providers/key/key';
 import { Logger } from '../providers/logger/logger';
 import { PlatformProvider } from '../providers/platform/platform';
 import { PopupProvider } from '../providers/popup/popup';
@@ -38,6 +39,7 @@ import { JoinWalletPage } from '../pages/add/join-wallet/join-wallet';
 import { FingerprintModalPage } from '../pages/fingerprint/fingerprint';
 import { BitPayCardIntroPage } from '../pages/integrations/bitpay-card/bitpay-card-intro/bitpay-card-intro';
 import { CoinbasePage } from '../pages/integrations/coinbase/coinbase';
+import { ConfirmInvoicePage } from '../pages/integrations/invoice/confirm-invoice/confirm-invoice';
 import { ShapeshiftPage } from '../pages/integrations/shapeshift/shapeshift';
 import { DisclaimerPage } from '../pages/onboarding/disclaimer/disclaimer';
 import { OnboardingPage } from '../pages/onboarding/onboarding';
@@ -85,7 +87,8 @@ export class CopayApp {
     JoinWalletPage,
     PaperWalletPage,
     ShapeshiftPage,
-    WalletDetailsPage
+    WalletDetailsPage,
+    ConfirmInvoicePage
   };
 
   constructor(
@@ -113,7 +116,8 @@ export class CopayApp {
     private walletTabsProvider: WalletTabsProvider,
     private renderer: Renderer,
     private userAgent: UserAgent,
-    private device: Device
+    private device: Device,
+    private keyProvider: KeyProvider
   ) {
     this.imageLoaderConfig.setFileNameCachedWithExtension(true);
     this.imageLoaderConfig.useImageTag(true);
@@ -209,19 +213,35 @@ export class CopayApp {
     this.registerIntegrations();
     this.incomingDataRedirEvent();
     this.scanFromWalletEvent();
-    this.events.subscribe('OpenWallet', wallet => this.openWallet(wallet));
-    // Check Profile
-    this.profile
-      .loadAndBindProfile()
-      .then(profile => {
-        this.onProfileLoad(profile);
+    this.events.subscribe('OpenWallet', (wallet, params) =>
+      this.openWallet(wallet, params)
+    );
+    this.keyProvider
+      .load()
+      .then(() => {
+        // Check Profile
+        this.profile
+          .loadAndBindProfile()
+          .then(profile => {
+            this.onProfileLoad(profile);
+          })
+          .catch((err: Error) => {
+            switch (err.message) {
+              case 'NONAGREEDDISCLAIMER':
+                this.logger.warn('Non agreed disclaimer');
+                this.rootPage = DisclaimerPage;
+                break;
+              default:
+                this.popupProvider.ionicAlert(
+                  'Could not initialize the app',
+                  err.message
+                );
+            }
+          });
       })
-      .catch((err: Error) => {
-        this.logger.warn('LoadAndBindProfile', err.message);
-        this.rootPage =
-          err.message == 'ONBOARDINGNONCOMPLETED: Onboarding non completed'
-            ? OnboardingPage
-            : DisclaimerPage;
+      .catch(err => {
+        this.popupProvider.ionicAlert('Error loading keys', err.message || '');
+        this.logger.error('Error loading keys: ', err);
       });
   }
 
@@ -326,7 +346,7 @@ export class CopayApp {
     });
   }
 
-  private openWallet(wallet) {
+  private openWallet(wallet, params) {
     // check if modal is already open
     if (this.isWalletModalOpen) {
       this.walletModal.dismiss();
@@ -336,6 +356,7 @@ export class CopayApp {
     this.walletModal = this.modalCtrl.create(
       page,
       {
+        ...params,
         walletId: wallet.credentials.walletId
       },
       {
